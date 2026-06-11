@@ -1,0 +1,42 @@
+name: 每月折扣率儀表板更新
+
+on:
+  # 每月5號 00:00 台灣時間（UTC+8 = UTC 16:00 前一天）
+  schedule:
+    - cron: '0 16 4 * *'
+
+  # 手動觸發：GitHub Actions 頁面點 "Run workflow"
+  workflow_dispatch:
+
+  # data/ 有新檔案 push 時自動觸發
+  push:
+    paths:
+      - 'data/銷售_*.xlsx'
+      - 'data/門市基本資料.xlsx'
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run generate.py
+        run: python scripts/generate.py
+
+      - name: Commit & push index.html
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add index.html
+          git diff --cached --quiet || git commit -m "chore: auto-update dashboard $(date '+%Y-%m-%d')"
+          git push

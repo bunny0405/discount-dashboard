@@ -440,38 +440,23 @@ footer{text-align:center;font-size:11px;color:var(--faint);margin-top:48px;paddi
   </div>
 </section>
 
-<!-- ⑨ 降折建議 -->
+<!-- ⑨ 門市警示 + 降折建議 -->
 <section>
-  <div class="stitle">降低折扣率：行動建議</div>
-  <div class="g3">
-    <div class="rec-card">
-      <div class="rec-t">① 紅利點數管理</div>
-      <div class="rec-s">SVIP 折扣來源的 46.5%</div>
-      <ul class="rec-list">
-        <li><span class="rn">1</span><span>每筆訂單紅利折抵設上限，建議不超過<strong>訂單金額 10%</strong></span></li>
-        <li><span class="rn">2</span><span>縮短點數有效期，降低累積後單次大額折抵</span></li>
-        <li><span class="rn">3</span><span>高級距點數改換贈品或體驗，保住毛利同時維持黏著度</span></li>
-      </ul>
+  <div class="stitle">折扣率偏高門市警示 <span class="stitle-note">正價門市前5高・排除員購</span></div>
+  <div class="card">
+    <div class="legend" style="margin-bottom:10px">
+      <div class="legend-item" style="font-size:11px;color:var(--muted)">括號內為高於當月正價均值的差距</div>
     </div>
-    <div class="rec-card">
-      <div class="rec-t">② 活動結構調整</div>
-      <div class="rec-s">任選折 50.2% 為最大折扣來源</div>
-      <ul class="rec-list">
-        <li><span class="rn">1</span><span>每月設<strong>兩週活動空窗</strong>，讓消費者回到原價體驗</span></li>
-        <li><span class="rn">2</span><span>建立<strong>新品保護期</strong>（上市前 4 週不列入任選折）</span></li>
-        <li><span class="rn">3</span><span>以滿額贈替代折現活動，維持客單不傷折扣率</span></li>
-      </ul>
-    </div>
-    <div class="rec-card">
-      <div class="rec-t">③ 支線 / 品別管控</div>
-      <div class="rec-s">AS+CA 14.5% 為正價最高支線</div>
-      <ul class="rec-list">
-        <li><span class="rn">1</span><span>AS+CA 支線確認是否有品類活動重疊，設定互斥規則</span></li>
-        <li><span class="rn">2</span><span>出清品與正品<strong>永遠分開追蹤</strong>，以正品 11.3% 為基準線</span></li>
-        <li><span class="rn">3</span><span>員購折扣率 34.3% 隔離計算，不納入對外報告</span></li>
-      </ul>
-    </div>
+    <table>
+      <thead><tr><th>排名</th><th>門市名稱</th><th class="r">折扣率</th><th class="r">vs 均值</th></tr></thead>
+      <tbody id="store-warning-tbody"></tbody>
+    </table>
   </div>
+</section>
+
+<section>
+  <div class="stitle">降低折扣率：行動建議 <span class="stitle-note">依當月數據 + 近3個月趨勢自動產生</span></div>
+  <div id="recs-container" class="g3"></div>
 </section>
 
 <!-- ⑩ 追蹤模板 -->
@@ -720,6 +705,40 @@ function render(mk){
     </tr>`).join('');
 
   selMember(activeMember, mk);
+
+  // 門市警示
+  const swTbody = document.getElementById('store-warning-tbody');
+  if(swTbody && d.storeWarning){
+    const avgR = d.storeAvgRate || 0;
+    swTbody.innerHTML = d.storeWarning.map((s,i)=>`
+      <tr>
+        <td style="color:var(--muted);font-size:12px">${i+1}</td>
+        <td class="bold">${s.name}</td>
+        <td class="r">${rateTagGeneral(s.disc_rate)}</td>
+        <td class="r"><span style="color:var(--red);font-size:12px;font-weight:600">+${s.vs_avg.toFixed(1)}pp</span></td>
+      </tr>`).join('')
+      + `<tr style="border-top:1px solid var(--border)">
+           <td colspan="2" style="font-size:11px;color:var(--muted)">正價均值</td>
+           <td class="r" style="font-size:12px;color:var(--muted)">${pct(avgR)}</td>
+           <td></td>
+         </tr>`;
+  }
+
+  // 動態建議
+  const recsEl = document.getElementById('recs-container');
+  if(recsEl && d.recs && d.recs.length){
+    recsEl.innerHTML = d.recs.map(r=>`
+      <div class="rec-card">
+        <div class="rec-t">${r.title}</div>
+        <div class="rec-s">${r.sub}</div>
+        <ul class="rec-list">
+          ${r.items.map((item,j)=>`<li><span class="rn">${j+1}</span><span>${item}</span></li>`).join('')}
+        </ul>
+      </div>`).join('');
+    // 調整 grid 欄數
+    recsEl.className = d.recs.length === 1 ? '' : d.recs.length === 2 ? 'g2' : 'g3';
+  }
+
   renderMobCards();
 }
 

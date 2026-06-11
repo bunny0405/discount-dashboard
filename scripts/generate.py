@@ -258,18 +258,188 @@ def process_month(filepath: str, store_df: pd.DataFrame) -> dict:
         }
     }
 
+    # ── 門市警示：正價前5高折扣率 ──
+    store_grp = df_main.groupby('倉庫名稱').agg(
+        sell=('零售價', 'sum'), disc=('折扣合計', 'sum')
+    ).reset_index()
+    store_grp['disc_rate'] = (store_grp['disc'] / store_grp['sell'] * 100).round(1)
+    store_grp = store_grp[store_grp['sell'] >= 300000]
+    avg_store_rate = round(store_grp['disc_rate'].mean(), 1)
+    top5_stores = store_grp.nlargest(5, 'disc_rate')[['倉庫名稱', 'disc_rate']].reset_index(drop=True)
+    store_warning = []
+    for _, row in top5_stores.iterrows():
+        vs = round(row['disc_rate'] - avg_store_rate, 1)
+        store_warning.append({
+            'name':      row['倉庫名稱'],
+            'disc_rate': float(row['disc_rate']),
+            'vs_avg':    vs,
+        })
+
+    # ── 當月建議觸發警示 ──
+    svip = next((m for m in members if m['code'] == '03'), None)
+    svip_bonus = svip['breakdown'].get('紅利折抵', 0) if svip else 0
+    任選pct = next((t['pct'] for t in disc_types if t['name'] == '任選折(複數)'), 0)
+    正品rate = next((p['disc_rate'] for p in prod_type if p['品別'] == '正品'), 0)
+
+    alerts = []
+    if svip_bonus > 8:
+        alerts.append({'type': 'svip_bonus', 'val': svip_bonus})
+    if 任選pct > 50:
+        alerts.append({'type': 'promo_pct', 'val': 任選pct})
+    if 正品rate > 10:
+        alerts.append({'type': 'normal_rate', 'val': 正品rate})
+    if kpi['disc_order_pct'] > 65:
+        alerts.append({'type': 'order_pct', 'val': kpi['disc_order_pct']})
+    branch_avg = sum(b['disc_rate'] for b in branch) / len(branch) if branch else 0
+    for b in branch:
+        if b['disc_rate'] - branch_avg >= 2:
+            alerts.append({'type': 'branch_high', 'name': b['name'], 'val': b['disc_rate'], 'avg': round(branch_avg, 1)})
+
     return {
-        'kpi':        kpi,
-        'discTypes':  disc_types,
-        'members':    members,
-        'prodType':   prod_type,
-        'promoType':  promo_type,
-        'promoName':  promo_name,
-        'storeType':  store_type,
-        'branch':     branch,
-        'ref':        ref,
-        'sched':      [],  # 由外層填入
+        'kpi':           kpi,
+        'discTypes':     disc_types,
+        'members':       members,
+        'prodType':      prod_type,
+        'promoType':     promo_type,
+        'promoName':     promo_name,
+        'storeType':     store_type,
+        'branch':        branch,
+        'ref':           ref,
+        'storeWarning':  store_warning,
+        'storeAvgRate':  avg_store_rate,
+        'alerts':        alerts,
+        'recs':          [],
+        'sched':         [],
     }
+
+# ── 自動建議產生（當月 + 3個月趨勢）────────────────
+def generate_recs(all_data: dict) -> dict:
+    keys = sorted(all_data.keys())
+    recs_by_month = {}
+
+    for i, key in enumerate(keys):
+        d = all_data[key]
+        alerts = d.get('alerts', [])
+        # 最近3個月 keys（含本月）
+        recent_keys = keys[max(0, i-2): i+1]
+        recs = []
+
+        # ① SVIP 紅利折抵
+        svip_bonus_vals = []
+        for k in recent_keys:
+            svip = next((m for m in all_data[k]['members'] if m['code']=='03'), None)
+            if svip:
+                svip_bonus_vals.append(svip['breakdown'].get('紅利折抵', 0))
+        if svip_bonus_vals and svip_bonus_vals[-1] > 8:
+            months_high = sum(1 for v in svip_bonus_vals if v > 8)
+            trend = f"連續 {months_high} 個月 > 8%" if months_high > 1 else f"本月 {svip_bonus_vals[-1]}%"
+            recs.append({
+                'title': '① 紅利點數管理',
+                'sub':   f'SVIP 紅利折抵偏高（{trend}）',
+                'items': [
+                    f'SVIP 紅利折抵本月達 {svip_bonus_vals[-1]}%，建議設定每筆最高折抵上限（如訂單 10%）',
+                    '縮短點數有效期，降低累積後單次大額折抵',
+                    '高級距點數改換贈品或體驗，保住毛利同時維持 SVIP 黏著度',
+                ]
+            })
+
+        # ② 任選折佔比
+        promo_vals = []
+        for k in recent_keys:
+            pct = next((t['pct'] for t in all_data[k]['discTypes'] if t['name']=='任選折(複數)'), 0)
+            promo_vals.append(pct)
+        if promo_vals and promo_vals[-1] > 50:
+            months_high = sum(1 for v in promo_vals if v > 50)
+            trend = f"連續 {months_high} 個月 > 50%" if months_high > 1 else f"本月 {promo_vals[-1]}%"
+            recs.append({
+                'title': '② 活動結構調整',
+                'sub':   f'任選折佔總折扣偏高（{trend}）',
+                'items': [
+                    '每月設至少兩週活動空窗，讓消費者回到原價體驗',
+                    '建立新品保護期（上市前 4 週不列入任選折）',
+                    '以滿額贈替代折現活動，維持客單不傷折扣率',
+                ]
+            })
+
+        # ③ 正品折扣率
+        normal_vals = []
+        for k in recent_keys:
+            r = next((p['disc_rate'] for p in all_data[k]['prodType'] if p['品別']=='正品'), 0)
+            normal_vals.append(r)
+        if normal_vals and normal_vals[-1] > 10:
+            months_high = sum(1 for v in normal_vals if v > 10)
+            trend = f"連續 {months_high} 個月 > 10%" if months_high > 1 else f"本月 {normal_vals[-1]}%"
+            recs.append({
+                'title': '③ 正品折扣率管控',
+                'sub':   f'正品折扣率超標（{trend}）',
+                'items': [
+                    f'正品折扣率本月 {normal_vals[-1]}%，建議以 10% 為上限',
+                    '出清品與正品分開追蹤，避免稀釋正品指標',
+                    '員購折扣隔離計算，不納入對外報告',
+                ]
+            })
+
+        # ④ 支線連續偏高（3個月趨勢）
+        if len(recent_keys) >= 2:
+            # 找各月各支線折扣率
+            branch_history = {}
+            for k in recent_keys:
+                for b in all_data[k]['branch']:
+                    if b['name'] not in branch_history:
+                        branch_history[b['name']] = []
+                    branch_history[b['name']].append(b['disc_rate'])
+            # 計算各月整體均值
+            overall_avgs = []
+            for k in recent_keys:
+                rates = [b['disc_rate'] for b in all_data[k]['branch']]
+                overall_avgs.append(sum(rates)/len(rates) if rates else 0)
+            # 找連續偏高支線
+            high_branches = []
+            for bname, brates in branch_history.items():
+                if len(brates) == len(recent_keys):
+                    above = [r - overall_avgs[j] >= 2 for j, r in enumerate(brates)]
+                    if sum(above) >= 2:
+                        high_branches.append({'name': bname, 'rates': brates, 'months': sum(above)})
+            if high_branches:
+                branch_list = '、'.join([f"{b['name']}（{b['rates'][-1]}%）" for b in high_branches[:3]])
+                recs.append({
+                    'title': '④ 支線折扣率持續偏高',
+                    'sub':   f'以下支線近期持續高於整體均值 +2pp 以上',
+                    'items': [
+                        f'{branch_list} 折扣率偏高，建議確認是否有活動重疊',
+                        '檢視該支線適用活動是否過多，設定互斥規則',
+                        '若無法調整活動，建議提高該支線正常品售價作為緩衝',
+                    ]
+                })
+
+        # ⑤ 有折扣訂單佔比
+        if d['kpi']['disc_order_pct'] > 65:
+            recs.append({
+                'title': '⑤ 折扣覆蓋率過高',
+                'sub':   f"本月 {d['kpi']['disc_order_pct']}% 訂單享有折扣",
+                'items': [
+                    '超過六成訂單享折扣，消費者容易養成等折扣習慣',
+                    '建議縮短活動天數，增加原價購買機會',
+                    '搭配滿額贈取代直接折現，降低折扣依賴',
+                ]
+            })
+
+        # 若無觸發，給預設健康提示
+        if not recs:
+            recs.append({
+                'title': '✅ 本月折扣結構健康',
+                'sub':   '各項指標均在門檻值內',
+                'items': [
+                    '持續維持正品折扣率在 10% 以下',
+                    '留意 SVIP 紅利折抵趨勢，避免累積後單次大額折抵',
+                    '活動空窗期維持，保持消費者原價購買習慣',
+                ]
+            })
+
+        recs_by_month[key] = recs
+
+    return recs_by_month
+
 
 # ── 掃描 data/ 資料夾 ────────────────────────────────
 def scan_files():
@@ -314,6 +484,12 @@ def main():
             all_data[key] = data
         except Exception as e:
             print(f"⚠️  {key} 處理失敗：{e}")
+
+    # 計算趨勢建議
+    print("💡 產生自動建議...")
+    recs_by_month = generate_recs(all_data)
+    for key in all_data:
+        all_data[key]['recs'] = recs_by_month.get(key, [])
 
     print("📝 產出 index.html...")
     template = load_template()

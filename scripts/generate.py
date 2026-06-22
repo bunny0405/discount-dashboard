@@ -112,13 +112,15 @@ def process_month(filepath: str, store_df: pd.DataFrame) -> dict:
     avg_d = ord_agg[ord_agg['有折扣'] == True]['客單'].mean()
     avg_n = ord_agg[ord_agg['有折扣'] == False]['客單'].mean()
 
-    sell_all = df_nooutlet_noemp['零售價'].sum() + df_outlet['零售價'].sum()
-    rev_all  = df_nooutlet_noemp['小計'].sum()   + df_outlet['小計'].sum()
-    disc_all = df_nooutlet_noemp['折扣合計'].sum() + df_outlet['折扣合計'].sum()
+    # 含OUTLET折扣率：全館排員購（正價+OUTLET，均排員購）
+    df_all_noemp = df[df['會員等級碼'] != '09']
+    sell_all = df_all_noemp['零售價'].sum()
+    rev_all  = df_all_noemp['小計'].sum()
+    disc_all = df_all_noemp['折扣合計'].sum()
 
     kpi = {
-        'disc_rate':      round(disc / sell * 100, 1) if sell else 0,
-        'disc_all_rate':  round(disc_all / sell_all * 100, 1) if sell_all else 0,
+        'disc_rate':      round((sell - rev) / sell * 100, 1) if sell else 0,
+        'disc_all_rate':  round((sell_all - rev_all) / sell_all * 100, 1) if sell_all else 0,
         'disc_order_pct': round(disc_orders / orders * 100, 1) if orders else 0,
         'avg_disc':       round(avg_d) if pd.notna(avg_d) else 0,
         'avg_nodis':      round(avg_n) if pd.notna(avg_n) else 0,
@@ -144,9 +146,9 @@ def process_month(filepath: str, store_df: pd.DataFrame) -> dict:
 
     # ── 品別折扣率 ──
     prod_grp = df_main.groupby('品別').agg(
-        sell=('零售價', 'sum'), disc=('折扣合計', 'sum')
+        sell=('零售價', 'sum'), disc=('折扣合計', 'sum'), rev=('小計', 'sum')
     ).reset_index()
-    prod_grp['disc_rate'] = (prod_grp['disc'] / prod_grp['sell'] * 100).round(1)
+    prod_grp['disc_rate'] = ((prod_grp['sell'] - prod_grp['rev']) / prod_grp['sell'] * 100).round(1)
     prod_dict = {r['品別']: r for _, r in prod_grp.iterrows()}
     prod_type = []
     for p in PROD_ORDER:
@@ -179,7 +181,7 @@ def process_month(filepath: str, store_df: pd.DataFrame) -> dict:
             'name':      LEVEL_MAP[code],
             'sell':      int(s),
             'rev':       int(r),
-            'disc_rate': round(d / s * 100, 1) if s else 0,
+            'disc_rate': round((s - r) / s * 100, 1) if s else 0,
             'threshold': MEMBER_THRESHOLD[code],
             'breakdown': bk,
         })
@@ -189,7 +191,7 @@ def process_month(filepath: str, store_df: pd.DataFrame) -> dict:
         sell=('零售價', 'sum'), disc=('折扣合計', 'sum'),
         rev=('小計', 'sum'), 筆數=('訂單編號', 'count')
     ).reset_index()
-    pt['disc_rate'] = (pt['disc'] / pt['sell'] * 100).round(1)
+    pt['disc_rate'] = ((pt['sell'] - pt['rev']) / pt['sell'] * 100).round(1)
     pt['pct']       = (pt['disc'] / total_disc * 100).round(1) if total_disc else 0
     pt = pt.sort_values('disc', ascending=False)
     promo_type = pt.rename(columns={'行促類型_adj': 'name'})[
@@ -205,7 +207,7 @@ def process_month(filepath: str, store_df: pd.DataFrame) -> dict:
             rev=('小計', 'sum'), cnt=('訂單編號', 'count')
         ).reset_index()
         pn = pn[pn['行促名稱'].notna() & (pn['行促名稱'] != '')].copy()
-        pn['disc_rate'] = (pn['disc'] / pn['sell'] * 100).round(1)
+        pn['disc_rate'] = ((pn['sell'] - pn['rev']) / pn['sell'] * 100).round(1)
         pn['pct']       = (pn['disc'] / total_disc * 100).round(1) if total_disc else 0
         pn = pn.sort_values('disc', ascending=False).head(15)
         promo_name = pn.rename(columns={'行促名稱': 'name'})[
@@ -220,7 +222,7 @@ def process_month(filepath: str, store_df: pd.DataFrame) -> dict:
     st = df_main.groupby('門市型態').agg(
         sell=('零售價', 'sum'), disc=('折扣合計', 'sum'), rev=('小計', 'sum')
     ).reset_index()
-    st['disc_rate'] = (st['disc'] / st['sell'] * 100).round(1)
+    st['disc_rate'] = ((st['sell'] - st['rev']) / st['sell'] * 100).round(1)
     store_type = st.rename(columns={'門市型態': 'name'})[
         ['name', 'sell', 'rev', 'disc_rate']
     ].to_dict('records')
@@ -231,7 +233,7 @@ def process_month(filepath: str, store_df: pd.DataFrame) -> dict:
     br = df_main.groupby('販售支線').agg(
         sell=('零售價', 'sum'), disc=('折扣合計', 'sum'), rev=('小計', 'sum')
     ).reset_index()
-    br['disc_rate'] = (br['disc'] / br['sell'] * 100).round(1)
+    br['disc_rate'] = ((br['sell'] - br['rev']) / br['sell'] * 100).round(1)
     br = br.sort_values('disc_rate', ascending=False)
     branch = br.rename(columns={'販售支線': 'name'})[
         ['name', 'sell', 'rev', 'disc_rate']
@@ -250,19 +252,19 @@ def process_month(filepath: str, store_df: pd.DataFrame) -> dict:
     ref = {
         'outlet': {
             'sell': o_sell, 'rev': o_rev,
-            'disc_rate': round(o_disc / o_sell * 100, 1) if o_sell else 0
+            'disc_rate': round((o_sell - o_rev) / o_sell * 100, 1) if o_sell else 0
         },
         'emp': {
             'sell': e_sell, 'rev': e_rev,
-            'disc_rate': round(e_disc / e_sell * 100, 1) if e_sell else 0
+            'disc_rate': round((e_sell - e_rev) / e_sell * 100, 1) if e_sell else 0
         }
     }
 
     # ── 門市警示：正價前5高折扣率 ──
     store_grp = df_main.groupby('倉庫名稱').agg(
-        sell=('零售價', 'sum'), disc=('折扣合計', 'sum')
+        sell=('零售價', 'sum'), disc=('折扣合計', 'sum'), rev=('小計', 'sum')
     ).reset_index()
-    store_grp['disc_rate'] = (store_grp['disc'] / store_grp['sell'] * 100).round(1)
+    store_grp['disc_rate'] = ((store_grp['sell'] - store_grp['rev']) / store_grp['sell'] * 100).round(1)
     store_grp = store_grp[store_grp['sell'] >= 300000]
     avg_store_rate = round(store_grp['disc_rate'].mean(), 1)
     top5_stores = store_grp.nlargest(5, 'disc_rate')[['倉庫名稱', 'disc_rate']].reset_index(drop=True)

@@ -566,7 +566,7 @@ function statusTag(s){
   return `<span class="status-tag ${m[s]||'st-orig'}">${s}</span>`;
 }
 
-let activeMth='2026-04', activeMember='03';
+let activeMth=Object.keys(DATA).sort().pop()||'2026-04', activeMember='03';
 
 function render(mk){
   const d=DATA[mk];

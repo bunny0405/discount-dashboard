@@ -125,10 +125,10 @@ def process_month(filepath: str, store_df: pd.DataFrame) -> dict:
         'avg_disc':       round(avg_d) if pd.notna(avg_d) else 0,
         'avg_nodis':      round(avg_n) if pd.notna(avg_n) else 0,
         'uplift':         round((avg_d / avg_n - 1) * 100, 1) if pd.notna(avg_d) and pd.notna(avg_n) and avg_n else 0,
-        'sell':           int(sell),
-        'rev':            int(rev),
-        'sell_all':       int(sell_all),
-        'rev_all':        int(rev_all),
+        'sell':           int(sell),       # 正價店×非員購 零售價
+        'rev':            int(rev),        # 正價店×非員購 銷售金額
+        'sell_all':       int(sell_all),   # 含OUTLET×非員購 零售價
+        'rev_all':        int(rev_all),    # 含OUTLET×非員購 銷售金額
     }
 
     # ── 折扣類型 ──

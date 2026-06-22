@@ -486,9 +486,11 @@ footer{text-align:center;font-size:11px;color:var(--faint);margin-top:48px;paddi
           <tr>
             <th>年度</th>
             <th>月份</th>
+            <th class="r">正價店零售價</th>
+            <th class="r">正價店銷售金額</th>
+            <th class="r">正價店折扣率</th>
             <th class="r">零售價</th>
             <th class="r">銷售金額</th>
-            <th class="r">正價店折扣率</th>
             <th class="r">整體折扣率</th>
           </tr>
         </thead>
@@ -572,6 +574,11 @@ function fmtM(n){return (n/1000000).toFixed(1)+'M'}
 function pct(v){return v.toFixed(1)+'%'}
 
 // 通用折扣率色標：<10綠 / 10-14.9藍 / ≥15紅
+function rateTagOverview(r){
+  if(r>=10) return `<span class="tag tr">${pct(r)}</span>`;
+  return `<span class="tag tb">${pct(r)}</span>`;
+}
+
 function rateTagGeneral(r){
   if(r>=15) return `<span class="tag tr">${pct(r)}</span>`;
   if(r>=10) return `<span class="tag tb">${pct(r)}</span>`;
@@ -867,10 +874,12 @@ function showOverview(){
     return `<tr>
       <td>${y}</td>
       <td>${parseInt(m)}月</td>
+      <td class="r">${fmt(d.kpi.sell||0)}</td>
+      <td class="r">${fmt(d.kpi.rev||0)}</td>
+      <td class="r">${rateTagOverview(d.kpi.disc_rate)}</td>
       <td class="r">${fmt(d.kpi.sell_all||0)}</td>
       <td class="r">${fmt(d.kpi.rev_all||0)}</td>
-      <td class="r">${rateTagGeneral(d.kpi.disc_rate)}</td>
-      <td class="r">${rateTagGeneral(d.kpi.disc_all_rate)}</td>
+      <td class="r">${rateTagOverview(d.kpi.disc_all_rate)}</td>
     </tr>`;
   }).join('');
 }

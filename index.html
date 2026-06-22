@@ -224,9 +224,13 @@ footer{text-align:center;font-size:11px;color:var(--faint);margin-top:48px;paddi
   <span class="lbl">年度</span>
   <select class="year-select" id="year-select" onchange="onYearChange(this.value)"></select>
   <div class="month-btns" id="month-btns"></div>
+  <div style="margin-left:12px;border-left:1px solid var(--border);padding-left:12px">
+    <button class="mbtn" id="overview-btn" onclick="showOverview()">總覽</button>
+  </div>
   <span style="font-size:11px;color:var(--faint)">正式版：資料夾有幾個月自動出現幾個按鈕</span>
 </div>
 
+<div id="main-section">
 <!-- ① KPI -->
 <section>
   <div class="stitle">整體概況 <span class="stitle-note">主指標：正價門市 × 非員購</span></div>
@@ -470,6 +474,29 @@ footer{text-align:center;font-size:11px;color:var(--faint);margin-top:48px;paddi
     <div class="pipe-step"><div class="pipe-num">層 05</div><div class="pipe-title">門市 / 支線</div><div class="pipe-items">百貨 vs 街邊<br>支線折扣率<br>異常門市查核</div></div>
   </div>
 </section>
+
+</div>
+<!-- 總覽頁籤 -->
+<div id="overview-section" style="display:none">
+  <section>
+    <div class="stitle">年度月份總覽</div>
+    <div class="card">
+      <table id="overview-table">
+        <thead>
+          <tr>
+            <th>年度</th>
+            <th>月份</th>
+            <th class="r">零售價</th>
+            <th class="r">銷售金額</th>
+            <th class="r">正價店折扣率</th>
+            <th class="r">整體折扣率</th>
+          </tr>
+        </thead>
+        <tbody id="overview-tbody"></tbody>
+      </table>
+    </div>
+  </section>
+</div>
 
 <footer>新地國際 折扣率分析儀表板 · 模擬版 · 正式版接 GitHub Actions 每月5號自動更新</footer>
 </div>
@@ -819,10 +846,39 @@ function onYearChange(year){
 }
 
 function switchMonth(btn,key){
+  hideOverview();
   document.querySelectorAll('.mbtn').forEach(b=>b.classList.remove('active'));
   btn.classList.add('active');
   activeMth=key;
   render(key);
+}
+
+function showOverview(){
+  document.getElementById('main-section').style.display='none';
+  document.getElementById('overview-section').style.display='block';
+  document.getElementById('overview-btn').classList.add('active');
+  document.querySelectorAll('.mbtn:not(#overview-btn)').forEach(b=>b.classList.remove('active'));
+  // 建立總覽表格
+  const keys = Object.keys(DATA).sort();
+  const tbody = document.getElementById('overview-tbody');
+  tbody.innerHTML = keys.map(k=>{
+    const d = DATA[k];
+    const [y,m] = k.split('-');
+    return `<tr>
+      <td>${y}</td>
+      <td>${parseInt(m)}月</td>
+      <td class="r">${fmt(d.kpi.sell_all||0)}</td>
+      <td class="r">${fmt(d.kpi.rev_all||0)}</td>
+      <td class="r">${rateTagGeneral(d.kpi.disc_rate)}</td>
+      <td class="r">${rateTagGeneral(d.kpi.disc_all_rate)}</td>
+    </tr>`;
+  }).join('');
+}
+
+function hideOverview(){
+  document.getElementById('main-section').style.display='block';
+  document.getElementById('overview-section').style.display='none';
+  document.getElementById('overview-btn').classList.remove('active');
 }
 
 initSwitcher();

@@ -184,6 +184,7 @@ def process_month(filepath: str, store_df: pd.DataFrame) -> dict:
             'disc_rate': round((s - r) / s * 100, 1) if s else 0,
             'threshold': MEMBER_THRESHOLD[code],
             'breakdown': bk,
+            'orders':    int(sub['訂單編號'].nunique()),
         })
 
     # ── 行促類型 ──

@@ -307,7 +307,7 @@ footer{text-align:center;font-size:11px;color:var(--faint);margin-top:48px;paddi
         <div class="card-t">會員等級彙整表</div>
         <div class="legend" style="margin-bottom:10px" id="member-legend"></div>
         <table>
-          <thead><tr><th>等級</th><th class="r">售價</th><th class="r">實收</th><th class="r">折扣率</th></tr></thead>
+          <thead><tr><th>等級</th><th class="r">交易筆數</th><th class="r">售價</th><th class="r">實收</th><th class="r">營收佔比</th><th class="r">客次佔比</th><th class="r">折扣率</th></tr></thead>
           <tbody id="member-tbody"></tbody>
         </table>
       </div>
@@ -657,16 +657,19 @@ function render(mk){
     <div class="legend-item" style="margin-left:12px;font-size:10px;color:var(--faint)">過路客/一般≥8% / VIP≥11% / SVIP≥18%</div>`;
 
   // member table
-  let ts=0,tr2=0;
-  d.members.forEach(m=>{ts+=m.sell;tr2+=m.rev;});
+  let ts=0,tr2=0,tOrd=0;
+  d.members.forEach(m=>{ts+=m.sell;tr2+=m.rev;tOrd+=(m.orders||0);});
   document.getElementById('member-tbody').innerHTML=
     d.members.map(m=>`<tr>
       <td><span style="font-size:10px;color:var(--faint);margin-right:4px">${m.code}</span>${m.name}</td>
+      <td class="r">${fmt(m.orders||0)}</td>
       <td class="r">${fmt(m.sell)}</td>
       <td class="r">${fmt(m.rev)}</td>
+      <td class="r" style="color:var(--muted)">${tr2>0?pct(m.rev/tr2*100):'-'}</td>
+      <td class="r" style="color:var(--muted)">${tOrd>0?pct((m.orders||0)/tOrd*100):'-'}</td>
       <td class="r">${rateTagMember(m.disc_rate,m.threshold)}</td>
     </tr>`).join('')+
-    `<tr class="total-row"><td class="bold">總計</td><td class="r bold">${fmt(ts)}</td><td class="r bold">${fmt(tr2)}</td><td class="r bold">${rateTagGeneral(Math.round((ts-tr2)/ts*1000)/10)}</td></tr>`;
+    `<tr class="total-row"><td class="bold">總計</td><td class="r bold">${fmt(tOrd)}</td><td class="r bold">${fmt(ts)}</td><td class="r bold">${fmt(tr2)}</td><td class="r bold">100.0%</td><td class="r bold">100.0%</td><td class="r bold">${rateTagGeneral(Math.round((ts-tr2)/ts*1000)/10)}</td></tr>`;
 
   // promo type legend
   document.getElementById('promotype-legend').innerHTML=`
